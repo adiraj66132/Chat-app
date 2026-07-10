@@ -3,7 +3,7 @@ import { io, type Socket } from 'socket.io-client';
 import { getAccessToken } from '../api/client';
 import { useAuth } from './AuthContext';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const SOCKET_URL = import.meta.env.VITE_API_URL ?? '';
 
 interface SocketContextType {
   socket: Socket | null;

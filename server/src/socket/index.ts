@@ -3,6 +3,7 @@ import { verifyAccessToken, type TokenPayload } from '../utils/jwt';
 import { prisma } from '../config/db';
 import * as onlineService from '../services/onlineService';
 import { registerChatHandlers } from './handlers/chat';
+import { setIO } from './emitter';
 
 interface AuthSocket extends Socket {
   userId?: string;
@@ -10,6 +11,8 @@ interface AuthSocket extends Socket {
 }
 
 export function setupSocket(io: SocketIOServer) {
+  setIO(io);
+
   io.use((socket: AuthSocket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) {

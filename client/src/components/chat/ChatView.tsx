@@ -6,6 +6,7 @@ import MessageList from './MessageList';
 import ComposeBar from './ComposeBar';
 import { getOtherUser } from '../../utils/conversation';
 import { fadeIn, easeOut } from '../../animations/motion';
+import Avatar from '../Avatar';
 
 export default function ChatView() {
   const { activeConversation, setShowSidebar } = useChat();
@@ -43,9 +44,7 @@ export default function ChatView() {
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="12" y2="18"/></svg>
         </button>
         <div className="relative shrink-0">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-telegram-blue text-sm font-bold text-white">
-            {name.charAt(0).toUpperCase()}
-          </div>
+          <Avatar name={name} avatarUrl={other?.avatarUrl} size={40} />
           {isOnline && (
             <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[var(--bg-sidebar)] bg-green-500" />
           )}

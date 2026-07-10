@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as userService from '../services/userService';
+import { emitToAll } from '../socket/emitter';
 
 export async function getMe(req: Request, res: Response, next: NextFunction) {
   try {
@@ -36,6 +37,7 @@ export async function searchUsers(req: Request, res: Response, next: NextFunctio
 export async function updateProfile(req: Request, res: Response, next: NextFunction) {
   try {
     const user = await userService.updateProfile(req.user!.userId, req.body);
+    emitToAll('chat:user_updated', user);
     res.json(user);
   } catch (err) {
     next(err);
@@ -50,6 +52,7 @@ export async function updateAvatar(req: Request, res: Response, next: NextFuncti
     }
     const avatarUrl = `/uploads/avatars/${req.file.filename}`;
     const user = await userService.updateAvatar(req.user!.userId, avatarUrl);
+    emitToAll('chat:user_updated', user);
     res.json(user);
   } catch (err) {
     next(err);

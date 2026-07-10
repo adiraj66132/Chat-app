@@ -3,6 +3,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { fadeUp, containerStagger, easeOut } from '../animations/motion';
+import Avatar from '../components/Avatar';
 
 const themes = [
   { value: 'LIGHT', label: 'Light', icon: '☀️' },
@@ -49,8 +50,8 @@ export default function Settings() {
           className="flex cursor-pointer items-center gap-4 rounded-xl bg-[var(--bg-surface)] p-4 transition-colors hover:bg-[var(--hover-overlay)]"
           onClick={() => navigate('/profile')}
         >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-telegram-blue text-lg font-bold text-white">
-            {user?.displayName?.charAt(0).toUpperCase()}
+          <div className="shrink-0">
+            <Avatar name={user?.displayName} avatarUrl={user?.avatarUrl} size={48} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-[var(--text-primary)]">{user?.displayName}</p>

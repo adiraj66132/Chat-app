@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;

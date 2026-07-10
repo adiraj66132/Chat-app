@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import { useCrypto } from '../../contexts/CryptoContext';
 import { deleteConversation } from '../../api/conversations';
+import Avatar from '../Avatar';
 import type { Conversation } from '../../types/conversation';
 import { fadeUp, containerStagger } from '../../animations/motion';
 import { pop } from '../../animations/anime';
@@ -118,23 +119,21 @@ function ConversationItem({
   }
 
   return (
-    <button
-      onClick={onSelect}
-      className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-        isActive
-          ? 'bg-telegram-blue/10'
-          : 'hover:bg-[var(--hover-overlay)]'
-      }`}
-    >
-      <div className="relative shrink-0">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-telegram-blue text-base font-bold text-white">
-          {name.charAt(0).toUpperCase()}
+      <button
+        onClick={onSelect}
+        className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+          isActive
+            ? 'bg-telegram-blue/10'
+            : 'hover:bg-[var(--hover-overlay)]'
+        }`}
+      >
+        <div className="relative shrink-0">
+          <Avatar name={name} avatarUrl={other?.avatarUrl} size={48} />
+          {isOnline && (
+            <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[var(--bg-sidebar)] bg-green-500" />
+          )}
         </div>
-        {isOnline && (
-          <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[var(--bg-sidebar)] bg-green-500" />
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between">
           <p className="truncate font-medium text-[var(--text-primary)]">{name}</p>
           {ts && (
