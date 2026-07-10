@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConversationType {
+  DM
+  GROUP
+  GLOBAL
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  TELEGRAM
+  NORD
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique @db.VarChar(50)
+  displayName  String   @map("display_name") @db.VarChar(100)
+  passwordHash String   @map("password_hash")
+  bio          String?  @db.Text
+  avatarUrl    String?  @map("avatar_url")
+  publicKey    String?  @map("public_key")
+  theme        Theme    @default(TELEGRAM)
+  lastSeenAt   DateTime @map("last_seen_at") @default(now())
+  createdAt    DateTime @map("created_at") @default(now())
+  updatedAt    DateTime @map("updated_at") @updatedAt
+
+  refreshTokens      RefreshToken[]
+  conversationLinks  ConversationParticipant[]
+  createdConversations Conversation[]              @relation("CreatedBy")
+  sentMessages       Message[]                    @relation("Sender")
+  messageReactions   MessageReaction[]
+  conversationKeys   ConversationKey[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash") @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @map("created_at") @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Conversation {
+  id          String           @id @default(uuid()) @db.Uuid
+  type        ConversationType
+  name        String?          @db.VarChar(100)
+  description String?          @db.Text
+  avatarUrl   String?          @map("avatar_url")
+  createdById String?          @map("created_by_id") @db.Uuid
+  createdAt   DateTime         @map("created_at") @default(now())
+  updatedAt   DateTime         @map("updated_at") @updatedAt
+
+  createdBy    User?                      @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
+  messages     Message[]
+  keys         ConversationKey[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String     @id @default(uuid()) @db.Uuid
+  conversationId String     @map("conversation_id") @db.Uuid
+  userId         String     @map("user_id") @db.Uuid
+  role           MemberRole @default(MEMBER)
+  joinedAt       DateTime   @map("joined_at") @default(now())
+  lastReadAt     DateTime?  @map("last_read_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id              String        @id @default(uuid()) @db.Uuid
+  conversationId  String        @map("conversation_id") @db.Uuid
+  senderId        String?       @map("sender_id") @db.Uuid
+  content         String?       @db.Text
+  type            MessageType   @default(TEXT)
+  status          MessageStatus @default(SENT)
+  deliveredAt     DateTime?     @map("delivered_at")
+  readAt          DateTime?     @map("read_at")
+  fileUrl         String?       @map("file_url")
+  fileName        String?       @map("file_name")
+  fileSize        Int?          @map("file_size")
+  mimeType        String?       @map("mime_type")
+  replyToId       String?       @map("reply_to_id") @db.Uuid
+  forwardedFromId String?       @map("forwarded_from_id") @db.Uuid
+  iv              String?       @map("iv")
+  editedAt        DateTime?     @map("edited_at")
+  deletedAt       DateTime?     @map("deleted_at")
+  createdAt       DateTime      @map("created_at") @default(now())
+
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User?               @relation("Sender", fields: [senderId], references: [id], onDelete: SetNull)
+  replyTo        Message?            @relation("ReplyTo", fields: [replyToId], references: [id], onDelete: SetNull)
+  forwardedFrom  Message?            @relation("ForwardedFrom", fields: [forwardedFromId], references: [id], onDelete: SetNull)
+  reactions      MessageReaction[]
+  replies        Message[]           @relation("ReplyTo")
+  forwards       Message[]           @relation("ForwardedFrom")
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// Per-participant wrapped Conversation Encryption Key (CEK). The server only
+// ever stores ciphertext it cannot decrypt; each participant's CEK is wrapped
+// (encrypted) with that participant's public key.
+model ConversationKey {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  wrappedKey     String   @map("wrapped_key") @db.Text
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@map("conversation_keys")
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @map("message_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  emoji     String   @db.VarChar(10)
+  createdAt DateTime @map("created_at") @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@map("message_reactions")
+}

@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  --color-telegram-blue: #2AABEE;
+  --color-telegram-dark-bg: #212121;
+  --color-telegram-dark-surface: #181818;
+  --color-telegram-dark-sidebar: #2F2F2F;
+  --color-telegram-light-bg: #FFFFFF;
+  --color-telegram-light-surface: #F5F5F5;
+  --color-telegram-light-sidebar: #F0F0F0;
+}
+
+:root.light {
+  --bg-primary: #FFFFFF;
+  --bg-surface: #F5F5F5;
+  --bg-sidebar: #F0F0F0;
+  --text-primary: #000000;
+  --text-secondary: #707579;
+  --text-muted: #A0A4A8;
+  --border-color: #E5E5E5;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
+  --bubble-mine: #2AABEE;
+  --bubble-other: #F0F0F0;
+  --hover-overlay: rgba(0,0,0,0.04);
+}
+
+:root.dark {
+  --bg-primary: #212121;
+  --bg-surface: #181818;
+  --bg-sidebar: #2F2F2F;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A8A8A8;
+  --text-muted: #707579;
+  --border-color: #3A3A3A;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --bubble-mine: #2AABEE;
+  --bubble-other: #2F2F2F;
+  --hover-overlay: rgba(255,255,255,0.05);
+}
+
+:root.telegram {
+  --bg-primary: #0E1621;
+  --bg-surface: #17212B;
+  --bg-sidebar: #0E1621;
+  --text-primary: #E8E8E8;
+  --text-secondary: #8E9297;
+  --text-muted: #5E6268;
+  --border-color: #1F2C38;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+  --bubble-mine: #2B5278;
+  --bubble-other: #182533;
+  --hover-overlay: rgba(255,255,255,0.04);
+}
+
+:root.nord {
+  --bg-primary: #2E3440;
+  --bg-surface: #3B4252;
+  --bg-sidebar: #2E3440;
+  --text-primary: #ECEFF4;
+  --text-secondary: #D8DEE9;
+  --text-muted: #8b94a6;
+  --border-color: #434C5E;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --bubble-mine: #5E81AC;
+  --bubble-other: #434C5E;
+  --hover-overlay: rgba(236,239,244,0.06);
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+/* Message fade-in */
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.message-enter {
+  animation: message-in 0.15s ease-out;
+}
