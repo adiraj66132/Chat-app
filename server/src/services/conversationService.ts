@@ -155,6 +155,17 @@ export async function deleteConversation(conversationId: string, userId: string)
   }
 }
 
+export async function deleteMyKey(conversationId: string, userId: string) {
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId } },
+  });
+  if (!participant) throw new AppError('Not a participant', 403);
+
+  await prisma.conversationKey.deleteMany({
+    where: { conversationId, userId },
+  });
+}
+
 export async function getMyKey(conversationId: string, userId: string) {
   const participant = await prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId } },

@@ -62,3 +62,12 @@ export async function putKeys(req: Request, res: Response, next: NextFunction) {
     next(err);
   }
 }
+
+export async function deleteKeys(req: Request, res: Response, next: NextFunction) {
+  try {
+    await conversationService.deleteMyKey(req.params.id as string, req.user!.userId);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+}

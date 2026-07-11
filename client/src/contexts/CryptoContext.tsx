@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useAuth } from './AuthContext';
 import { setPublicKey } from '../api/users';
-import { getConversationKeys, putConversationKeys } from '../api/conversations';
+import { getConversationKeys, putConversationKeys, deleteConversationKey } from '../api/conversations';
 import {
   generateKeyPair,
   generateCEK,
@@ -47,7 +47,7 @@ const CryptoContext = createContext<CryptoContextType | null>(null);
 const privKeyStorage = (userId: string) => `e2ee:priv:${userId}`;
 
 export function CryptoProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [ready, setReady] = useState(false);
   const [keyVersion, setKeyVersion] = useState(0);
   const privateKeyRef = useRef<string | null>(null);
@@ -72,6 +72,7 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       try {
         const { publicJwk, privateJwk } = await generateKeyPair();
         await setPublicKey(publicJwk);
+        updateUser({ publicKey: publicJwk });
         localStorage.setItem(privKeyStorage(user.id), privateJwk);
         privateKeyRef.current = privateJwk;
       } catch {
@@ -104,7 +105,9 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
           return cek;
         }
       } catch {
-        // fall through to creation
+        // Stale wrapped key (e.g. user regenerated key pair on another device).
+        // Remove it so the next cycle can establish a fresh CEK.
+        await deleteConversationKey(id).catch(() => {});
       }
 
       // 2) Create a fresh CEK. To avoid two participants generating divergent
@@ -117,9 +120,9 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
 
       const recipients = new Map<string, string>();
       for (const p of conversation.participants ?? []) {
-        if (p.publicKey) recipients.set(p.id, p.publicKey);
+        if (p.publicKey && p.id !== user?.id) recipients.set(p.id, p.publicKey);
       }
-      if (user?.publicKey && !recipients.has(user.id)) {
+      if (user?.publicKey) {
         recipients.set(user.id, user.publicKey);
       }
       if (recipients.size === 0) return null; // can't establish E2EE yet

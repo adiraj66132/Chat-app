@@ -43,3 +43,9 @@ export async function putConversationKeys(
     body: JSON.stringify({ keys }),
   });
 }
+
+export async function deleteConversationKey(id: string): Promise<void> {
+  await apiRequest(`/api/conversations/${id}/keys`, {
+    method: 'DELETE',
+  });
+}
