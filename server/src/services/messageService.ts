@@ -12,15 +12,20 @@ export async function getMessages(conversationId: string, userId: string, cursor
 
   if (!conversation) throw new AppError('Conversation not found', 404);
 
+  let clearedAt: Date | null = null;
   if (conversation.type !== 'GLOBAL') {
     const participant = await prisma.conversationParticipant.findUnique({
       where: { conversationId_userId: { conversationId, userId } },
     });
     if (!participant) throw new AppError('Not a participant', 403);
+    clearedAt = participant.clearedAt;
   }
 
+  const where: any = { conversationId, deletedAt: null, NOT: { deletedByIds: { has: userId } } };
+  if (clearedAt) where.createdAt = { gt: clearedAt };
+
   const messages = await prisma.message.findMany({
-    where: { conversationId, deletedAt: null },
+    where,
     take: MESSAGE_LIMIT + 1,
     orderBy: { createdAt: 'desc' },
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -55,7 +60,6 @@ export async function sendMessage(
     content?: string;
     type?: string;
     replyToId?: string;
-    iv?: string;
     fileUrl?: string;
     fileName?: string;
     fileSize?: number;
@@ -82,9 +86,6 @@ export async function sendMessage(
     if (!replyTo) throw new AppError('Message to reply to not found', 404);
   }
 
-  // Content arrives pre-encrypted from the client (E2EE); the server only
-  // ever stores ciphertext + IV and cannot read it, so no sanitization is
-  // applied here (the client renders via React, which escapes by default).
   const content = data.content ?? null;
 
   const message = await prisma.message.create({
@@ -94,7 +95,6 @@ export async function sendMessage(
       content,
       type: (data.type as any) || 'TEXT',
       replyToId: data.replyToId || null,
-      iv: data.iv || null,
       fileUrl: data.fileUrl || null,
       fileName: data.fileName || null,
       fileSize: data.fileSize || null,
@@ -144,6 +144,137 @@ export async function editMessage(messageId: string, userId: string, content: st
   return updated;
 }
 
+export async function searchMessages(userId: string, query: string) {
+  const myIds = await prisma.conversationParticipant.findMany({
+    where: { userId },
+    select: { conversationId: true },
+  });
+
+  const messages = await prisma.message.findMany({
+    where: {
+      conversationId: { in: myIds.map((p) => p.conversationId) },
+      content: { contains: query, mode: 'insensitive' },
+      deletedAt: null,
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    include: {
+      sender: { select: { id: true, username: true, displayName: true } },
+      conversation: { select: { id: true, type: true, name: true } },
+    },
+  });
+
+  return messages.map((m) => ({
+    id: m.id,
+    content: m.content,
+    createdAt: m.createdAt,
+    sender: m.sender,
+    conversationId: m.conversationId,
+    conversation: m.conversation,
+  }));
+}
+
+export async function pinMessage(messageId: string, userId: string) {
+  const msg = await prisma.message.findUnique({ where: { id: messageId } });
+  if (!msg) throw new AppError('Message not found', 404);
+  // Only allow pinning in groups.
+  const conv = await prisma.conversation.findUnique({ where: { id: msg.conversationId } });
+  if (!conv || conv.type !== 'GROUP') throw new AppError('Can only pin in groups', 400);
+  // Only OWNER/ADMIN can pin.
+  const p = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId: msg.conversationId, userId } },
+  });
+  if (!p || (p.role !== 'OWNER' && p.role !== 'ADMIN')) throw new AppError('Forbidden', 403);
+
+  await prisma.pinnedMessage.upsert({
+    where: { conversationId_messageId: { conversationId: msg.conversationId, messageId } },
+    create: { conversationId: msg.conversationId, messageId, pinnedBy: userId },
+    update: { pinnedBy: userId, pinnedAt: new Date() },
+  });
+}
+
+export async function unpinMessage(messageId: string, userId: string) {
+  const msg = await prisma.message.findUnique({ where: { id: messageId } });
+  if (!msg) throw new AppError('Message not found', 404);
+  const conv = await prisma.conversation.findUnique({ where: { id: msg.conversationId } });
+  if (!conv || conv.type !== 'GROUP') throw new AppError('Can only unpin in groups', 400);
+  const p = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId: msg.conversationId, userId } },
+  });
+  if (!p || (p.role !== 'OWNER' && p.role !== 'ADMIN')) throw new AppError('Forbidden', 403);
+
+  await prisma.pinnedMessage.deleteMany({
+    where: { conversationId: msg.conversationId, messageId },
+  });
+}
+
+export async function getPinnedMessages(conversationId: string, userId: string) {
+  const conv = await prisma.conversation.findUnique({ where: { id: conversationId } });
+  if (!conv) throw new AppError('Conversation not found', 404);
+  if (conv.type !== 'GROUP') return [];
+
+  const p = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId } },
+  });
+  if (!p) throw new AppError('Not a participant', 403);
+
+  const pinned = await prisma.pinnedMessage.findMany({
+    where: { conversationId },
+    orderBy: { pinnedAt: 'desc' },
+    include: {
+      message: {
+        include: {
+          sender: { select: { id: true, username: true, displayName: true } },
+        },
+      },
+      pinnedByUser: { select: { id: true, username: true, displayName: true } },
+    },
+  });
+  return pinned;
+}
+
+export async function forwardMessage(messageId: string, userId: string, targetConversationId: string) {
+  const original = await prisma.message.findUnique({ where: { id: messageId } });
+  if (!original) throw new AppError('Message not found', 404);
+  if (!original.content && !original.fileUrl) throw new AppError('Nothing to forward', 400);
+
+  // User must be participant in both conversations.
+  for (const cid of [original.conversationId, targetConversationId]) {
+    const conv = await prisma.conversation.findUnique({ where: { id: cid } });
+    if (!conv) throw new AppError('Conversation not found', 404);
+    if (conv.type !== 'GLOBAL') {
+      const p = await prisma.conversationParticipant.findUnique({
+        where: { conversationId_userId: { conversationId: cid, userId } },
+      });
+      if (!p) throw new AppError('Not a participant', 403);
+    }
+  }
+
+  const message = await prisma.message.create({
+    data: {
+      conversationId: targetConversationId,
+      senderId: userId,
+      content: original.content,
+      type: original.type || 'TEXT',
+      status: 'SENT',
+      fileUrl: original.fileUrl,
+      fileName: original.fileName,
+      fileSize: original.fileSize,
+      mimeType: original.mimeType,
+    },
+    include: {
+      sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+    },
+  });
+
+  await prisma.conversation.update({
+    where: { id: targetConversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  return message;
+}
+
 export async function deleteMessage(messageId: string, userId: string) {
   const message = await prisma.message.findUnique({ where: { id: messageId } });
   if (!message) throw new AppError('Message not found', 404);
@@ -151,6 +282,6 @@ export async function deleteMessage(messageId: string, userId: string) {
 
   await prisma.message.update({
     where: { id: messageId },
-    data: { deletedAt: new Date(), content: null },
+    data: { deletedByIds: { push: userId } },
   });
 }

@@ -2,10 +2,9 @@ import { useState, useRef, useEffect, type FormEvent, type KeyboardEvent, type C
 import { motion } from 'motion/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '../../contexts/SocketContext';
-import { useChat } from '../../contexts/ChatContext';
-import { useCrypto } from '../../contexts/CryptoContext';
 import { tapBounce } from '../../animations/anime';
 import { uploadFile, MAX_UPLOAD_BYTES, type UploadResult } from '../../api/uploads';
+import EmojiPicker from '../EmojiPicker';
 
 interface Props {
   conversationId: string;
@@ -16,10 +15,9 @@ export default function ComposeBar({ conversationId }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { socket, connected } = useSocket();
-  const { activeConversation } = useChat();
-  const { encryptMessage } = useCrypto();
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,21 +37,11 @@ export default function ComposeBar({ conversationId }: Props) {
       socket.emit('chat:stop_typing', { conversationId });
     }
 
-    let encrypted = { content: caption || undefined, iv: undefined as string | undefined };
-    try {
-      const result = await encryptMessage(activeConversation, caption);
-      encrypted = { content: result.content || undefined, iv: result.iv };
-    } catch {
-      // Fall back to plaintext if encryption cannot be established.
-      encrypted = { content: caption || undefined, iv: undefined };
-    }
-
     socket.emit(
       'chat:send',
       {
         conversationId,
-        content: encrypted.content,
-        iv: encrypted.iv,
+        content: caption || undefined,
         type: attachment
           ? attachment.mimeType.startsWith('image/')
             ? 'IMAGE'
@@ -73,6 +61,11 @@ export default function ComposeBar({ conversationId }: Props) {
         inputRef.current?.focus();
       }
     );
+  }
+
+  function insertEmoji(e: string) {
+    setContent((prev) => prev + e);
+    inputRef.current?.focus();
   }
 
   async function handleFileSelect(e: ChangeEvent<HTMLInputElement>) {
@@ -129,7 +122,18 @@ export default function ComposeBar({ conversationId }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-[var(--border-color)] bg-[var(--bg-primary)] p-3">
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowEmoji((v) => !v)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-overlay)]"
+            title="Emoji"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </button>
+          {showEmoji && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />}
+        </div>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}

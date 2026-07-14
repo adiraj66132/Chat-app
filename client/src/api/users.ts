@@ -36,13 +36,6 @@ export async function updateTheme(theme: string): Promise<{ id: string; theme: s
   });
 }
 
-export async function setPublicKey(publicKey: string): Promise<UserProfile> {
-  return apiRequest<UserProfile>('/api/users/me/public-key', {
-    method: 'POST',
-    body: JSON.stringify({ publicKey }),
-  });
-}
-
 export async function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
   return apiRequest('/api/users/me/change-password', {
     method: 'POST',

@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { CryptoProvider } from './contexts/CryptoContext';
 import Login from './pages/Login';
+import ServerStatus from './components/ServerStatus';
 import Register from './pages/Register';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
@@ -25,7 +25,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <ThemeProvider>
-      <CryptoProvider>
+        <ServerStatus>
         <BrowserRouter>
           <Routes>
           <Route
@@ -71,7 +71,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
         </BrowserRouter>
-      </CryptoProvider>
+        </ServerStatus>
     </ThemeProvider>
   );
 }

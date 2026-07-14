@@ -1,5 +1,5 @@
 import { apiRequest } from './client';
-import type { Conversation } from '../types/conversation';
+import type { Conversation, GroupMember, ParticipantRole } from '../types/conversation';
 
 export async function listConversations(): Promise<Conversation[]> {
   return apiRequest<Conversation[]>('/api/conversations');
@@ -12,6 +12,60 @@ export async function createConversation(participantId: string): Promise<Convers
   });
 }
 
+export interface CreateGroupInput {
+  name: string;
+  description?: string;
+  avatarUrl?: string;
+  participantIds: string[];
+}
+
+export async function createGroup(input: CreateGroupInput): Promise<Conversation> {
+  return apiRequest<Conversation>('/api/conversations/group', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getGroupMembers(id: string): Promise<GroupMember[]> {
+  return apiRequest<GroupMember[]>(`/api/conversations/${id}/members`);
+}
+
+export async function addGroupMembers(id: string, userIds: string[]): Promise<Conversation> {
+  return apiRequest<Conversation>(`/api/conversations/${id}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ userIds }),
+  });
+}
+
+export async function removeGroupMember(id: string, userId: string): Promise<void> {
+  await apiRequest(`/api/conversations/${id}/members/${userId}`, { method: 'DELETE' });
+}
+
+export async function updateGroup(
+  id: string,
+  data: { name?: string; description?: string | null; avatarUrl?: string | null }
+): Promise<Conversation> {
+  return apiRequest<Conversation>(`/api/conversations/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function changeGroupRole(
+  id: string,
+  userId: string,
+  role: ParticipantRole
+): Promise<void> {
+  await apiRequest(`/api/conversations/${id}/members/${userId}/role`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function leaveGroup(id: string): Promise<{ deleted: boolean }> {
+  return apiRequest<{ deleted: boolean }>(`/api/conversations/${id}/leave`, { method: 'POST' });
+}
+
 export async function getConversation(id: string): Promise<Conversation> {
   return apiRequest<Conversation>(`/api/conversations/${id}`);
 }
@@ -20,32 +74,6 @@ export async function deleteConversation(id: string): Promise<void> {
   await apiRequest(`/api/conversations/${id}`, { method: 'DELETE' });
 }
 
-export async function clearConversation(id: string): Promise<void> {
-  await apiRequest(`/api/conversations/${id}`, { method: 'DELETE' });
-}
-
-export interface ConversationKeyEntry {
-  userId: string;
-  wrappedKey: string;
-}
-
-// Returns the wrapped CEK for the current user in this conversation (null if none yet).
-export async function getConversationKeys(id: string): Promise<{ wrappedKey: string | null }> {
-  return apiRequest<{ wrappedKey: string | null }>(`/api/conversations/${id}/keys`);
-}
-
-export async function putConversationKeys(
-  id: string,
-  keys: ConversationKeyEntry[]
-): Promise<void> {
-  await apiRequest(`/api/conversations/${id}/keys`, {
-    method: 'PUT',
-    body: JSON.stringify({ keys }),
-  });
-}
-
-export async function deleteConversationKey(id: string): Promise<void> {
-  await apiRequest(`/api/conversations/${id}/keys`, {
-    method: 'DELETE',
-  });
+export async function clearConversationMessages(id: string): Promise<void> {
+  await apiRequest(`/api/conversations/${id}/messages`, { method: 'DELETE' });
 }

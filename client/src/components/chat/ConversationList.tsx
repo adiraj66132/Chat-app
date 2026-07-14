@@ -5,7 +5,6 @@ import { useConversations } from '../../hooks/useConversations';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
-import { useCrypto } from '../../contexts/CryptoContext';
 import { deleteConversation } from '../../api/conversations';
 import Avatar from '../Avatar';
 import type { Conversation } from '../../types/conversation';
@@ -45,31 +44,12 @@ function ConversationItem({
   currentUserId?: string;
 }) {
   const other = getOtherUser(conv, currentUserId);
+  const isGroup = conv.type === 'GROUP';
   const name = conv.name || other?.displayName || 'Unknown';
   const last = conv.lastMessage;
-  const { ensureCEK, decryptMessage, keyVersion } = useCrypto();
-
-  // Decrypt the last-message preview for end-to-end encrypted conversations.
-  const encrypted = !!(last?.content && last?.iv);
-  const [preview, setPreview] = useState<string | null>(null);
-  useEffect(() => {
-    if (!encrypted) return;
-    let cancelled = false;
-    (async () => {
-      await ensureCEK(conv);
-      if (cancelled) return;
-      const text = await decryptMessage(conv.id, last!.content, last!.iv);
-      if (!cancelled && text) setPreview(text);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [conv, last, encrypted, ensureCEK, decryptMessage, keyVersion]);
 
   let lastMsg: string;
-  if (encrypted) {
-    lastMsg = preview ?? '🔒 Encrypted message';
-  } else if (last?.content) {
+  if (last?.content) {
     lastMsg = last.content;
   } else if (last?.fileUrl) {
     lastMsg = last.fileName ? `📎 ${last.fileName}` : '📎 Attachment';
@@ -128,8 +108,14 @@ function ConversationItem({
         }`}
       >
         <div className="relative shrink-0">
-          <Avatar name={name} avatarUrl={other?.avatarUrl} size={48} />
-          {isOnline && (
+          {isGroup ? (
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-telegram-blue/15 text-xl text-telegram-blue">
+              👥
+            </div>
+          ) : (
+            <Avatar name={name} avatarUrl={other?.avatarUrl} size={48} />
+          )}
+          {!isGroup && isOnline && (
             <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[var(--bg-sidebar)] bg-green-500" />
           )}
         </div>

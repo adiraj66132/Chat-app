@@ -5,10 +5,12 @@ import { useMessages } from '../../hooks/useMessages';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useSocket } from '../../contexts/SocketContext';
-import { useCrypto } from '../../contexts/CryptoContext';
+import { pinMessage } from '../../api/messages';
 import type { Message } from '../../types/conversation';
 import { messageBubble } from '../../animations/motion';
+import { formatText } from '../../utils/markdown';
 import { assetUrl } from '../../api/client';
+import ForwardModal from './ForwardModal';
 
 function formatBytes(bytes?: number | null): string {
   if (!bytes) return '';
@@ -59,11 +61,11 @@ export default function MessageList({ conversationId }: Props) {
   const { user } = useAuth();
   const { activeConversation } = useChat();
   const { socket, typingUsers } = useSocket();
-  const { decryptMessage, ensureCEK, keyVersion } = useCrypto();
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
+  const [forwardingMsgId, setForwardingMsgId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const lastReadIdRef = useRef<string | null>(null);
-  const [decrypted, setDecrypted] = useState<Map<string, string>>(() => new Map());
 
   const {
     data,
@@ -74,72 +76,6 @@ export default function MessageList({ conversationId }: Props) {
   } = useMessages(conversationId);
 
   const allMessages = data?.pages.flatMap((p) => p.messages) ?? [];
-
-  // Establish the conversation key when the conversation opens so we can
-  // Establish the conversation key when the conversation opens so we can
-  // decrypt incoming history and new messages. If the key isn't ready yet
-  // (e.g. the other participant is the designated creator and hasn't opened
-  // yet), retry a few times so we converge even when both sides open at once.
-  useEffect(() => {
-    if (!activeConversation || activeConversation.id !== conversationId) return;
-    let cancelled = false;
-    let attempt = 0;
-    const tryEstablish = async () => {
-      if (cancelled) return;
-      const cek = await ensureCEK(activeConversation).catch(() => null);
-      if (cek || cancelled) return;
-      if (attempt++ < 4) {
-        setTimeout(tryEstablish, 1500);
-      }
-    };
-    tryEstablish();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeConversation, conversationId, ensureCEK]);
-
-  // Reset decryption cache when switching conversations.
-  useEffect(() => {
-    setDecrypted(new Map());
-  }, [conversationId]);
-
-  // Decrypt any encrypted messages (content + IV) for display.
-  // Only successfully decrypted plaintext is cached; if a key isn't available
-  // yet we leave it pending and re-attempt when `keyVersion` changes.
-  useEffect(() => {
-    let cancelled = false;
-    const pending = allMessages.filter((m) => m.content && m.iv && !decrypted.has(m.id));
-    if (pending.length === 0) return;
-    let needKey = false;
-    Promise.all(
-      pending.map(async (m) => {
-        const text = await decryptMessage(conversationId, m.content, m.iv);
-        if (text === null) {
-          needKey = true;
-          return null;
-        }
-        return [m.id, text] as const;
-      })
-    ).then((results) => {
-      if (cancelled) return;
-      const resolved = results.filter((r): r is readonly [string, string] => r !== null);
-      if (resolved.length > 0) {
-        setDecrypted((prev) => {
-          const next = new Map(prev);
-          for (const [id, text] of resolved) next.set(id, text);
-          return next;
-        });
-      }
-      // If any message couldn't be decrypted (no key yet), try to obtain the
-      // conversation key; once it arrives `keyVersion` bumps and we retry.
-      if (needKey && activeConversation && activeConversation.id === conversationId) {
-        ensureCEK(activeConversation).catch(() => {});
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [allMessages, conversationId, decryptMessage, decrypted, keyVersion, activeConversation, ensureCEK]);
 
   useEffect(() => {
     if (!socket) return;
@@ -202,6 +138,7 @@ export default function MessageList({ conversationId }: Props) {
         }));
         return { ...old, pages };
       });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
     };
 
     socket.on('chat:new_message', handleNewMessage);
@@ -286,82 +223,116 @@ export default function MessageList({ conversationId }: Props) {
         }
         const msg = row.msg;
         const isMine = msg.sender?.id === user?.id;
+        const isGroup = activeConversation?.type === 'GROUP';
         return (
-          <motion.div
-            key={msg.id}
-            layout="position"
-            initial="hidden"
-            animate="visible"
-            variants={messageBubble}
-            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className={`mb-1 flex ${isMine ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[75%] rounded-2xl px-4 py-2 ${
-                isMine
-                  ? 'rounded-br-sm bg-[var(--bubble-mine)] text-white'
-                  : 'rounded-bl-sm bg-[var(--bubble-other)] text-[var(--text-primary)]'
-              }`}
+          <div key={msg.id} className="relative">
+            {forwardingMsgId === msg.id && (
+              <ForwardModal messageId={msg.id} onClose={() => setForwardingMsgId(null)} />
+            )}
+            <motion.div
+              layout="position"
+              initial="hidden"
+              animate="visible"
+              variants={messageBubble}
+              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              className={`mb-1 flex ${isMine ? 'justify-end' : 'justify-start'}`}
+              onMouseEnter={() => setHoveredMsgId(msg.id)}
+              onMouseLeave={() => setHoveredMsgId(null)}
             >
-              {!isMine && msg.sender && (
-                <p className="mb-0.5 text-xs font-semibold text-telegram-blue">
-                  {msg.sender.displayName}
-                </p>
-              )}
-          {msg.replyTo && (
-            <div className="mb-1 rounded-lg border-l-[3px] border-[var(--text-muted)] bg-black/10 px-2 py-1 text-xs text-[var(--text-secondary)]">
-              <p className="font-medium">{msg.replyTo.sender.displayName}</p>
-              <p className="truncate">{msg.iv ? '🔒 Encrypted message' : msg.replyTo.content}</p>
-            </div>
-          )}
-
-          {msg.fileUrl && msg.type === 'IMAGE' && (
-            <a
-              href={assetUrl(msg.fileUrl)}
-              target="_blank"
-              rel="noreferrer"
-              className="mb-1 block"
-            >
-              <img
-                src={assetUrl(msg.fileUrl)}
-                alt={msg.fileName || 'image'}
-                className="max-h-72 w-auto rounded-lg object-cover"
-              />
-            </a>
-          )}
-
-          {msg.fileUrl && msg.type !== 'IMAGE' && (
-            <a
-              href={assetUrl(msg.fileUrl)}
-              target="_blank"
-              rel="noreferrer"
-              download={msg.fileName}
-              className="mb-1 flex items-center gap-3 rounded-lg bg-black/10 px-3 py-2 transition-colors hover:bg-black/20"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-telegram-blue/20 text-telegram-blue">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{msg.fileName}</span>
-                <span className="block text-[10px] opacity-60">{formatBytes(msg.fileSize)}</span>
-              </span>
-            </a>
-          )}
-
-          {msg.content && (
-            <p className="break-words text-sm leading-relaxed">
-              {msg.iv ? (decrypted.get(msg.id) ?? '🔒') : msg.content}
-            </p>
-          )}
-              <div className="mt-0.5 flex items-center justify-end gap-1">
-                <span className="text-[10px] opacity-60">
-                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  {msg.editedAt && ' (edited)'}
-                </span>
-                {isMine && msg.status && <StatusIcon status={msg.status} />}
+              <div
+                className={`group relative max-w-[75%] rounded-2xl px-4 py-2 ${
+                  isMine
+                    ? 'rounded-br-sm bg-[var(--bubble-mine)] text-white'
+                    : 'rounded-bl-sm bg-[var(--bubble-other)] text-[var(--text-primary)]'
+                }`}
+              >
+                {!isMine && msg.sender && (
+                  <p className="mb-0.5 text-xs font-semibold text-telegram-blue">
+                    {msg.sender.displayName}
+                  </p>
+                )}
+            {msg.replyTo && (
+              <div className="mb-1 rounded-lg border-l-[3px] border-[var(--text-muted)] bg-black/10 px-2 py-1 text-xs text-[var(--text-secondary)]">
+                <p className="font-medium">{msg.replyTo.sender.displayName}</p>
+                <p className="truncate">{formatText(msg.replyTo.content)}</p>
               </div>
-            </div>
-          </motion.div>
+            )}
+
+            {msg.fileUrl && msg.type === 'IMAGE' && (
+              <a
+                href={assetUrl(msg.fileUrl)}
+                target="_blank"
+                rel="noreferrer"
+                className="mb-1 block"
+              >
+                <img
+                  src={assetUrl(msg.fileUrl)}
+                  alt={msg.fileName || 'image'}
+                  className="max-h-72 w-auto rounded-lg object-cover"
+                />
+              </a>
+            )}
+
+            {msg.fileUrl && msg.type !== 'IMAGE' && (
+              <a
+                href={assetUrl(msg.fileUrl)}
+                target="_blank"
+                rel="noreferrer"
+                download={msg.fileName}
+                className="mb-1 flex items-center gap-3 rounded-lg bg-black/10 px-3 py-2 transition-colors hover:bg-black/20"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-telegram-blue/20 text-telegram-blue">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{msg.fileName}</span>
+                  <span className="block text-[10px] opacity-60">{formatBytes(msg.fileSize)}</span>
+                </span>
+              </a>
+            )}
+
+            {msg.content && (
+              <p className="break-words text-sm leading-relaxed">{formatText(msg.content)}</p>
+            )}
+                <div className="mt-0.5 flex items-center justify-end gap-1">
+                  <span className="text-[10px] opacity-60">
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {msg.editedAt && ' (edited)'}
+                  </span>
+                  {isMine && msg.status && <StatusIcon status={msg.status} />}
+                </div>
+                {hoveredMsgId === msg.id && (
+                  <div className={`absolute ${isMine ? '-left-8' : '-right-8'} top-1 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100`}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setForwardingMsgId(msg.id); }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-primary)] text-[var(--text-secondary)] shadow-md hover:text-telegram-blue"
+                      title="Forward"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                    {isGroup && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); pinMessage(msg.id).then(() => queryClient.invalidateQueries({ queryKey: ['pinned', conversationId] })); }}
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-primary)] text-[var(--text-secondary)] shadow-md hover:text-telegram-blue"
+                        title="Pin"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z"/></svg>
+                      </button>
+                    )}
+                    {isMine && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); socket?.emit('chat:delete', { conversationId, messageId: msg.id }); }}
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-primary)] text-[var(--text-secondary)] shadow-md hover:text-red-500"
+                        title="Delete"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
         );
       })}
 

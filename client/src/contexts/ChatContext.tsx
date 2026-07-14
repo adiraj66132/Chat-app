@@ -21,7 +21,6 @@ function mergeUser(participant: User, u: Partial<User>): User {
     displayName: u.displayName !== undefined ? u.displayName : participant.displayName,
     username: u.username !== undefined ? u.username : participant.username,
     bio: u.bio !== undefined ? u.bio : participant.bio,
-    publicKey: u.publicKey !== undefined ? u.publicKey : participant.publicKey,
   };
 }
 
@@ -56,8 +55,72 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     socket.on('chat:user_updated', handler);
+
+    // --- Group lifecycle events ---
+    const invalidate = (conversationId: string) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['group-members', conversationId] });
+    };
+
+    const onGroupCreated = (data: { conversation: { id: string } }) => {
+      socket.emit('chat:join', { conversationId: data.conversation.id });
+      invalidate(data.conversation.id);
+    };
+
+    const onMemberAdded = (data: { conversationId: string; conversation: Conversation }) => {
+      invalidate(data.conversationId);
+      setActiveConversation((prev) =>
+        prev && prev.id === data.conversationId ? (data.conversation as Conversation) : prev
+      );
+    };
+
+    const onMemberRemoved = (data: { conversationId: string; userId: string }) => {
+      if (data.userId === user?.id) {
+        socket.emit('chat:leave', { conversationId: data.conversationId });
+        setActiveConversation((prev) => (prev?.id === data.conversationId ? null : prev));
+      }
+      invalidate(data.conversationId);
+    };
+
+    const onGroupUpdated = (data: {
+      conversationId: string;
+      name?: string;
+      avatarUrl?: string;
+      description?: string;
+    }) => {
+      invalidate(data.conversationId);
+      setActiveConversation((prev) =>
+        prev && prev.id === data.conversationId
+          ? { ...prev, name: data.name, avatarUrl: data.avatarUrl, description: data.description }
+          : prev
+      );
+    };
+
+    const onRoleChanged = (data: { conversationId: string }) => invalidate(data.conversationId);
+
+    const onMemberLeft = (data: { conversationId: string; userId: string }) => {
+      if (data.userId === user?.id) {
+        socket.emit('chat:leave', { conversationId: data.conversationId });
+        setActiveConversation((prev) => (prev?.id === data.conversationId ? null : prev));
+      }
+      invalidate(data.conversationId);
+    };
+
+    socket.on('conversation:group-created', onGroupCreated);
+    socket.on('group:member-added', onMemberAdded);
+    socket.on('group:member-removed', onMemberRemoved);
+    socket.on('group:updated', onGroupUpdated);
+    socket.on('group:role-changed', onRoleChanged);
+    socket.on('group:member-left', onMemberLeft);
+
     return () => {
       socket.off('chat:user_updated', handler);
+      socket.off('conversation:group-created', onGroupCreated);
+      socket.off('group:member-added', onMemberAdded);
+      socket.off('group:member-removed', onMemberRemoved);
+      socket.off('group:updated', onGroupUpdated);
+      socket.off('group:role-changed', onRoleChanged);
+      socket.off('group:member-left', onMemberLeft);
     };
   }, [socket, user?.id, queryClient, updateUser]);
 

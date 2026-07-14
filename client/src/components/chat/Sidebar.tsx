@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ConversationList from './ConversationList';
 import UserSearch from './UserSearch';
+import CreateGroupModal from './CreateGroupModal';
+import MessageSearch from './MessageSearch';
 import { useChat } from '../../contexts/ChatContext';
 import { slideInLeft, easeOut } from '../../animations/motion';
 
 function SidebarContent() {
-  const [searching, setSearching] = useState(false);
+  const [searching, setSearching] = useState<'users' | 'messages' | null>(null);
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const { setShowSidebar } = useChat();
   const navigate = useNavigate();
 
@@ -15,19 +18,33 @@ function SidebarContent() {
     <div className="flex h-full w-full flex-col bg-[var(--bg-sidebar)]">
       <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
         <h1 className="text-lg font-bold text-[var(--text-primary)]">
-          {searching ? 'New Chat' : 'Chats'}
+          {searching === 'users' ? 'New Chat' : searching === 'messages' ? 'Search' : 'Chats'}
         </h1>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setSearching(!searching)}
+            onClick={() => setSearching(searching === 'users' ? null : 'users')}
             className="flex h-9 w-9 items-center justify-center rounded-full text-telegram-blue transition-colors hover:bg-telegram-blue/10"
-            title={searching ? 'Back' : 'New chat'}
+            title={searching === 'users' ? 'Back' : 'New chat'}
           >
-            {searching ? (
+            {searching === 'users' ? (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
             ) : (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             )}
+          </button>
+          <button
+            onClick={() => setSearching(searching === 'messages' ? null : 'messages')}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-overlay)] hover:text-[var(--text-primary)]"
+            title="Search messages"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <button
+            onClick={() => setCreatingGroup(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-telegram-blue transition-colors hover:bg-telegram-blue/10"
+            title="New group"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
           </button>
           <button
             onClick={() => navigate('/settings')}
@@ -46,11 +63,14 @@ function SidebarContent() {
         </div>
       </div>
 
-      {searching ? (
-        <UserSearch onClose={() => setSearching(false)} />
+      {searching === 'users' ? (
+        <UserSearch onClose={() => setSearching(null)} />
+      ) : searching === 'messages' ? (
+        <MessageSearch />
       ) : (
         <ConversationList />
       )}
+      {creatingGroup && <CreateGroupModal onClose={() => setCreatingGroup(false)} />}
     </div>
   );
 }

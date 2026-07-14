@@ -30,7 +30,6 @@ export async function getUserById(userId: string) {
       displayName: true,
       bio: true,
       avatarUrl: true,
-      publicKey: true,
       lastSeenAt: true,
     },
   });
@@ -57,7 +56,6 @@ export async function searchUsers(query: string, currentUserId: string) {
       displayName: true,
       bio: true,
       avatarUrl: true,
-      publicKey: true,
       lastSeenAt: true,
     },
     take: 20,
@@ -85,7 +83,6 @@ export async function updateProfile(
       displayName: true,
       bio: true,
       avatarUrl: true,
-      publicKey: true,
       theme: true,
       lastSeenAt: true,
     },
@@ -124,7 +121,6 @@ export async function updateAvatar(userId: string, avatarUrl: string) {
       displayName: true,
       bio: true,
       avatarUrl: true,
-      publicKey: true,
       theme: true,
       lastSeenAt: true,
     },
@@ -148,16 +144,4 @@ export async function updateTheme(userId: string, theme: string) {
   return user;
 }
 
-export async function setPublicKey(userId: string, publicKey: string) {
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: { publicKey },
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      publicKey: true,
-    },
-  });
-  return user;
-}
+

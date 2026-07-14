@@ -14,6 +14,7 @@ enum ConversationType {
 }
 
 enum MemberRole {
+  OWNER
   ADMIN
   MEMBER
 }
@@ -56,6 +57,7 @@ model User {
   sentMessages       Message[]                    @relation("Sender")
   messageReactions   MessageReaction[]
   conversationKeys   ConversationKey[]
+  pinnedMessages     PinnedMessage[]
 
   @@map("users")
 }
@@ -84,8 +86,9 @@ model Conversation {
 
   createdBy    User?                      @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   participants ConversationParticipant[]
-  messages     Message[]
-  keys         ConversationKey[]
+  messages        Message[]
+  keys            ConversationKey[]
+  pinnedMessages  PinnedMessage[]
 
   @@map("conversations")
 }
@@ -97,6 +100,7 @@ model ConversationParticipant {
   role           MemberRole @default(MEMBER)
   joinedAt       DateTime   @map("joined_at") @default(now())
   lastReadAt     DateTime?  @map("last_read_at")
+  clearedAt      DateTime?  @map("cleared_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -121,6 +125,7 @@ model Message {
   replyToId       String?       @map("reply_to_id") @db.Uuid
   forwardedFromId String?       @map("forwarded_from_id") @db.Uuid
   iv              String?       @map("iv")
+  deletedByIds    String[]      @map("deleted_by_ids") @default([])
   editedAt        DateTime?     @map("edited_at")
   deletedAt       DateTime?     @map("deleted_at")
   createdAt       DateTime      @map("created_at") @default(now())
@@ -132,6 +137,7 @@ model Message {
   reactions      MessageReaction[]
   replies        Message[]           @relation("ReplyTo")
   forwards       Message[]           @relation("ForwardedFrom")
+  pinnedEntries  PinnedMessage[]
 
   @@index([conversationId, createdAt])
   @@map("messages")
@@ -165,4 +171,19 @@ model MessageReaction {
 
   @@unique([messageId, userId, emoji])
   @@map("message_reactions")
+}
+
+model PinnedMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  messageId      String   @map("message_id") @db.Uuid
+  pinnedBy       String   @map("pinned_by") @db.Uuid
+  pinnedAt       DateTime @map("pinned_at") @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  pinnedByUser User        @relation(fields: [pinnedBy], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, messageId])
+  @@map("pinned_messages")
 }

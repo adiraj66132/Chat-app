@@ -45,7 +45,7 @@ export async function registerUser(username: string, password: string, displayNa
   const accessToken = signAccessToken({ userId: user.id, username: user.username });
 
   return {
-    user: { id: user.id, username: user.username, displayName: user.displayName, publicKey: user.publicKey },
+    user: { id: user.id, username: user.username, displayName: user.displayName },
     accessToken,
     rawToken,
   };
@@ -76,7 +76,7 @@ export async function loginUser(username: string, password: string) {
   const accessToken = signAccessToken({ userId: user.id, username: user.username });
 
   return {
-    user: { id: user.id, username: user.username, displayName: user.displayName, publicKey: user.publicKey },
+    user: { id: user.id, username: user.username, displayName: user.displayName },
     accessToken,
     rawToken,
   };
@@ -120,7 +120,7 @@ export async function refreshUserAccessToken(rawToken: string) {
   return {
     accessToken,
     rawToken: newRawToken,
-    user: { id: stored.user.id, username: stored.user.username, displayName: stored.user.displayName, publicKey: stored.user.publicKey },
+    user: { id: stored.user.id, username: stored.user.username, displayName: stored.user.displayName },
   };
 }
 

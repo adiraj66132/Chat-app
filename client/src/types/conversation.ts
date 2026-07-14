@@ -4,11 +4,20 @@ export interface Conversation {
   id: string;
   type: 'DM' | 'GROUP' | 'GLOBAL';
   name?: string;
+  description?: string;
   avatarUrl?: string;
   lastMessage?: Message;
   unreadCount: number;
   participants: User[];
   updatedAt: string;
+}
+
+export type ParticipantRole = 'OWNER' | 'ADMIN' | 'MEMBER';
+
+export interface GroupMember {
+  user: User;
+  role: ParticipantRole;
+  joinedAt: string;
 }
 
 export interface Message {

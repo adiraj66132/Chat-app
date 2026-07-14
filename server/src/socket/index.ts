@@ -34,6 +34,9 @@ export function setupSocket(io: SocketIOServer) {
 
     // Track online
     onlineService.addUser(userId, socket.id);
+    // Join a personal room so the server can target this user's sockets directly
+    // (used for group invites/removals).
+    socket.join(userId);
     io.emit('user:online', { userId });
 
     // Send the newly-connected socket a snapshot of everyone currently

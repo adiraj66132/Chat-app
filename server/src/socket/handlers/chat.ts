@@ -33,7 +33,6 @@ export function registerChatHandlers(
         content?: string;
         replyToId?: string;
         type?: string;
-        iv?: string;
         fileUrl?: string;
         fileName?: string;
         fileSize?: number;
@@ -75,7 +74,6 @@ export function registerChatHandlers(
           }
         }
 
-        // Content is pre-encrypted client-side (E2EE); store ciphertext + IV as-is.
         const message = await prisma.message.create({
           data: {
             conversationId: data.conversationId,
@@ -84,7 +82,6 @@ export function registerChatHandlers(
             type: (data.type as any) || 'TEXT',
             status: 'SENT',
             replyToId: data.replyToId || null,
-            iv: data.iv || null,
             fileUrl: data.fileUrl || null,
             fileName: data.fileName || null,
             fileSize: data.fileSize || null,
@@ -185,10 +182,10 @@ export function registerChatHandlers(
 
       await prisma.message.update({
         where: { id: data.messageId },
-        data: { deletedAt: new Date(), content: null },
+        data: { deletedByIds: { push: userId } },
       });
 
-      io.to(roomName(message.conversationId)).emit('chat:deleted', {
+      socket.emit('chat:deleted', {
         messageId: data.messageId,
         conversationId: message.conversationId,
       });

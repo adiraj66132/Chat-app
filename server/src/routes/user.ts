@@ -36,7 +36,6 @@ router.use(authenticate);
 router.get('/me', userController.getMe);
 router.patch('/me', validate(updateProfileSchema), userController.updateProfile);
 router.post('/me/avatar', upload.single('avatar'), userController.updateAvatar);
-router.post('/me/public-key', userController.setPublicKey);
 router.patch('/me/theme', userController.updateTheme);
 router.post('/me/change-password', validate(changePasswordSchema), userController.changePassword);
 router.get('/search', userController.searchUsers);

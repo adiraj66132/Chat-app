@@ -79,16 +79,4 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
   }
 }
 
-export async function setPublicKey(req: Request, res: Response, next: NextFunction) {
-  try {
-    const publicKey = String(req.body?.publicKey || '');
-    if (!publicKey) {
-      res.status(400).json({ error: 'publicKey is required' });
-      return;
-    }
-    const user = await userService.setPublicKey(req.user!.userId, publicKey);
-    res.json(user);
-  } catch (err) {
-    next(err);
-  }
-}
+

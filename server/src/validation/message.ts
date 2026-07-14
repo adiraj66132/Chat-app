@@ -4,7 +4,6 @@ export const sendMessageSchema = z.object({
   content: z.string().min(1).max(5000).optional(),
   replyToId: z.string().uuid().optional(),
   type: z.enum(['TEXT', 'IMAGE', 'FILE']).optional(),
-  iv: z.string().optional(),
   fileUrl: z.string().optional(),
   fileName: z.string().optional(),
   fileSize: z.number().optional(),
