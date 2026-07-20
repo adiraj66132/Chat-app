@@ -28,7 +28,7 @@ const io = new SocketIOServer(server, {
 });
 
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginResourcePolicy: { policy: 'same-origin' },
   contentSecurityPolicy: {
     useDefaults: false,
     directives: {
@@ -38,7 +38,7 @@ app.use(helmet({
       fontSrc: ["'self'", 'https:', 'data:'],
       formAction: ["'self'"],
       frameAncestors: ["'self'"],
-      imgSrc: ["'self'", 'data:', 'https://i.suar.me'],
+      imgSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
       scriptSrc: ["'self'"],
       scriptSrcAttr: ["'none'"],
@@ -48,7 +48,7 @@ app.use(helmet({
 }));
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use(cookieParser());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(path.resolve(env.UPLOAD_DIR)));
 
 app.use('/api', apiLimiter);
@@ -64,7 +64,7 @@ app.use('/api', messageRoutes);
 app.use('/api/uploads', uploadRoutes);
 const clientDist = path.resolve(__dirname, '../../client/dist');
 app.use(express.static(clientDist));
-app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 
 app.use(errorHandler);
 

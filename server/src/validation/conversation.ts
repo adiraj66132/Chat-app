@@ -42,3 +42,7 @@ export const updateGroupSchema = z.object({
 export const changeRoleSchema = z.object({
   role: z.enum(['OWNER', 'ADMIN', 'MEMBER']),
 });
+
+export const conversationKeySchema = z.object({
+  wrappedKey: z.string().min(1, 'wrappedKey is required'),
+});

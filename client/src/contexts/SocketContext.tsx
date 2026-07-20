@@ -26,7 +26,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = getAccessToken();
-    if (!token || !user) return;
+    if (!token || !user?.id) return;
 
     const s = io(SOCKET_URL, {
       auth: { token },
@@ -107,7 +107,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     return () => {
       s.close();
     };
-  }, [user]);
+  }, [user?.id]);
 
   return (
     <SocketContext.Provider value={{ socket, connected, onlineUsers, typingUsers }}>

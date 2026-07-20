@@ -30,10 +30,11 @@ export async function getUserById(userId: string) {
       displayName: true,
       bio: true,
       avatarUrl: true,
+      publicKey: true,
+      theme: true,
       lastSeenAt: true,
     },
   });
-  if (!user) throw new AppError('User not found', 404);
   return user;
 }
 
@@ -64,7 +65,7 @@ export async function searchUsers(query: string, currentUserId: string) {
 
 export async function updateProfile(
   userId: string,
-  data: { displayName?: string; bio?: string; username?: string }
+  data: { displayName?: string; bio?: string; username?: string; publicKey?: string }
 ) {
   if (data.username) {
     const taken = await prisma.user.findFirst({
@@ -105,10 +106,15 @@ export async function changePassword(
   if (!valid) throw new AppError('Current password is incorrect', 400);
 
   const passwordHash = await hashPassword(newPassword);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { passwordHash },
-  });
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    }),
+    // Revoke all existing refresh tokens so active sessions are forced to
+    // re-authenticate with the new password.
+    prisma.refreshToken.deleteMany({ where: { userId } }),
+  ]);
 }
 
 export async function updateAvatar(userId: string, avatarUrl: string) {
@@ -129,7 +135,7 @@ export async function updateAvatar(userId: string, avatarUrl: string) {
 }
 
 export async function updateTheme(userId: string, theme: string) {
-  const validThemes = ['LIGHT', 'DARK', 'TELEGRAM', 'NORD'] as const;
+  const validThemes = ['LIGHT', 'DARK', 'AURORA', 'NORD', 'ROSE'] as const;
   if (!validThemes.includes(theme as any)) {
     throw new AppError('Invalid theme', 400);
   }

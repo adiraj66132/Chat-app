@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, type FormEvent, type KeyboardEvent, type C
 import { motion } from 'motion/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '../../contexts/SocketContext';
+import { useCrypto } from '../../contexts/CryptoContext';
+import { useChat } from '../../contexts/ChatContext';
 import { tapBounce } from '../../animations/anime';
 import { uploadFile, MAX_UPLOAD_BYTES, type UploadResult } from '../../api/uploads';
 import EmojiPicker from '../EmojiPicker';
@@ -15,6 +17,13 @@ export default function ComposeBar({ conversationId }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { socket, connected } = useSocket();
+  const { activeConversation } = useChat();
+  const { encryptMessage } = useCrypto();
+
+  // Reset sending state if the socket drops mid-send.
+  useEffect(() => {
+    if (!connected) setSending(false);
+  }, [connected]);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -37,30 +46,39 @@ export default function ComposeBar({ conversationId }: Props) {
       socket.emit('chat:stop_typing', { conversationId });
     }
 
-    socket.emit(
-      'chat:send',
-      {
-        conversationId,
-        content: caption || undefined,
-        type: attachment
-          ? attachment.mimeType.startsWith('image/')
-            ? 'IMAGE'
-            : 'FILE'
-          : 'TEXT',
-        fileUrl: attachment?.fileUrl,
-        fileName: attachment?.fileName,
-        fileSize: attachment?.fileSize,
-        mimeType: attachment?.mimeType,
-      },
-      (ack: { ok: boolean; message?: any; error?: string }) => {
-        if (ack.ok) {
-          queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    try {
+      const encrypted = caption
+        ? await encryptMessage(activeConversation, caption)
+        : { content: undefined as string | undefined };
+
+      socket.emit(
+        'chat:send',
+        {
+          conversationId,
+          content: encrypted.content,
+          iv: encrypted.iv,
+          type: attachment
+            ? attachment.mimeType.startsWith('image/')
+              ? 'IMAGE'
+              : 'FILE'
+            : 'TEXT',
+          fileUrl: attachment?.fileUrl,
+          fileName: attachment?.fileName,
+          fileSize: attachment?.fileSize,
+          mimeType: attachment?.mimeType,
+        },
+        (ack: { ok: boolean; message?: any; error?: string }) => {
+          if (ack.ok) {
+            queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          }
+          setSending(false);
+          inputRef.current?.focus();
         }
-        setSending(false);
-        inputRef.current?.focus();
-      }
-    );
+      );
+    } catch {
+      setSending(false);
+    }
   }
 
   function insertEmoji(e: string) {

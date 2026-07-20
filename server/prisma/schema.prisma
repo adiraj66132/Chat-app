@@ -34,8 +34,9 @@ enum MessageStatus {
 enum Theme {
   LIGHT
   DARK
-  TELEGRAM
+  AURORA
   NORD
+  ROSE
 }
 
 model User {
@@ -46,7 +47,7 @@ model User {
   bio          String?  @db.Text
   avatarUrl    String?  @map("avatar_url")
   publicKey    String?  @map("public_key")
-  theme        Theme    @default(TELEGRAM)
+  theme        Theme    @default(AURORA)
   lastSeenAt   DateTime @map("last_seen_at") @default(now())
   createdAt    DateTime @map("created_at") @default(now())
   updatedAt    DateTime @map("updated_at") @updatedAt

@@ -1,6 +1,6 @@
 # Chat App
 
-A real-time chat application with end-to-end encryption, built with React, TypeScript, and Express.
+A real-time chat application built with React, TypeScript, and Express.
 
 ## Features
 

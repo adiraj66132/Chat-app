@@ -8,8 +8,9 @@ import Avatar from '../components/Avatar';
 const themes = [
   { value: 'LIGHT', label: 'Light', icon: '☀️' },
   { value: 'DARK', label: 'Dark', icon: '🌙' },
-  { value: 'TELEGRAM', label: 'Telegram', icon: '💬' },
+  { value: 'AURORA', label: 'Aurora', icon: '💬' },
   { value: 'NORD', label: 'Nord', icon: '❄️' },
+  { value: 'ROSE', label: 'Rose', icon: '🌹' },
 ] as const;
 
 export default function Settings() {

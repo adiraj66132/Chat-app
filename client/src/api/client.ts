@@ -61,8 +61,12 @@ export async function apiRequest<T>(
     if (!refreshPromise) {
       refreshPromise = refreshAccessToken();
     }
-    const newToken = await refreshPromise;
-    refreshPromise = null;
+    let newToken: string | null = null;
+    try {
+      newToken = await refreshPromise;
+    } finally {
+      refreshPromise = null;
+    }
 
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`;

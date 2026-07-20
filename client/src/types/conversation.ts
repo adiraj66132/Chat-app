@@ -42,6 +42,7 @@ export interface Message {
   replyTo?: {
     id: string;
     content?: string;
+    iv?: string | null;
     sender: { id: string; displayName: string };
   };
   reactions?: MessageReaction[];
@@ -68,4 +69,5 @@ export interface SendMessageInput {
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
+  iv?: string;
 }

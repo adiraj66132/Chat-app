@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "db:bootstrap": "bash scripts/db-bootstrap.sh",
+    "predev": "npm run db:bootstrap",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "prestart": "npm run db:bootstrap",
     "start": "node dist/index.js",
     "db:start": "pg_ctl -D ~/pgdata -o \"-p 5432 -k /tmp\" -l ~/pg.log start",
     "db:stop": "pg_ctl -D ~/pgdata stop",
@@ -19,6 +22,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -26,6 +30,7 @@
     "express": "^4.21.1",
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.0.0",
+    "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "sanitize-html": "^2.13.1",

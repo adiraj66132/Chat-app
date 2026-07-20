@@ -8,6 +8,7 @@ export const sendMessageSchema = z.object({
   fileName: z.string().optional(),
   fileSize: z.number().optional(),
   mimeType: z.string().optional(),
+  iv: z.string().optional(),
 }).refine((data) => data.content || data.fileUrl, {
   message: 'Message must have content or a file',
 });

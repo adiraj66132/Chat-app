@@ -5,12 +5,31 @@ import { useMessages } from '../../hooks/useMessages';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useSocket } from '../../contexts/SocketContext';
+import { useCrypto } from '../../contexts/CryptoContext';
 import { pinMessage } from '../../api/messages';
 import type { Message } from '../../types/conversation';
 import { messageBubble } from '../../animations/motion';
 import { formatText } from '../../utils/markdown';
 import { assetUrl } from '../../api/client';
 import ForwardModal from './ForwardModal';
+
+function DecryptedContent({ conversationId, content, iv }: { conversationId: string; content?: string; iv?: string | null }) {
+  const { decryptMessage } = useCrypto();
+  const [text, setText] = useState<string | null>(content ?? null);
+
+  useEffect(() => {
+    let cancelled = false;
+    decryptMessage(conversationId, content, iv).then((t) => {
+      if (!cancelled) setText(t);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, content, iv, decryptMessage]);
+
+  return <>{text ? formatText(text) : null}</>;
+}
+
 
 function formatBytes(bytes?: number | null): string {
   if (!bytes) return '';
@@ -61,6 +80,7 @@ export default function MessageList({ conversationId }: Props) {
   const { user } = useAuth();
   const { activeConversation } = useChat();
   const { socket, typingUsers } = useSocket();
+  const { registerConversation } = useCrypto();
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [forwardingMsgId, setForwardingMsgId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -79,23 +99,34 @@ export default function MessageList({ conversationId }: Props) {
 
   useEffect(() => {
     if (!socket) return;
+    registerConversation(activeConversation);
 
     const handleNewMessage = (message: Message) => {
       if (message.conversationId !== conversationId) return;
       queryClient.setQueryData(['messages', conversationId], (old: any) => {
         if (!old) return old;
-        const pages = old.pages.map((p: any) => ({
-          ...p,
-          messages: p.messages.some((m: any) => m.id === message.id)
-            ? p.messages
-            : [...p.messages, message],
-        }));
+        const pages = old.pages.slice();
+        const lastIdx = pages.length - 1;
+        const lastPage = pages[lastIdx];
+        if (lastPage.messages.some((m: any) => m.id === message.id)) return old;
+        pages[lastIdx] = { ...lastPage, messages: [...lastPage.messages, message] };
         return { ...old, pages };
       });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     };
 
-    const handleStatusUpdate = (update: { messageId?: string; status: string; deliveredAt?: string; readAt?: string }) => {
+    const handleStatusUpdate = (update: {
+      messageId?: string;
+      status: string;
+      deliveredAt?: string;
+      readAt?: string;
+      // Per-sender READ semantics: only the message *author* (senderId) should
+      // see their own messages flip to READ, and only those created at/before
+      // `upTo`. This keeps group read receipts correct — one member reading no
+      // longer marks the sender's checkmarks READ for everyone else.
+      senderId?: string;
+      upTo?: string;
+    }) => {
       queryClient.setQueryData(['messages', conversationId], (old: any) => {
         if (!old) return old;
         const pages = old.pages.map((p: any) => ({
@@ -106,8 +137,12 @@ export default function MessageList({ conversationId }: Props) {
                 ? { ...m, status: update.status, deliveredAt: update.deliveredAt, readAt: update.readAt }
                 : m;
             }
-            if (update.status === 'READ' && m.senderId !== user?.id) {
-              return { ...m, status: 'READ' as const, readAt: update.readAt };
+            if (update.status === 'READ' && update.senderId) {
+              // Only the sender's own messages within the read window update.
+              const within = !update.upTo || new Date(m.createdAt) <= new Date(update.upTo);
+              return m.senderId === update.senderId && within
+                ? { ...m, status: 'READ' as const, readAt: update.readAt }
+                : m;
             }
             return m;
           }),
@@ -152,7 +187,7 @@ export default function MessageList({ conversationId }: Props) {
       socket.off('chat:edited', handleEdited);
       socket.off('chat:deleted', handleDeleted);
     };
-  }, [socket, conversationId, queryClient]);
+  }, [socket, conversationId, queryClient, activeConversation, registerConversation]);
 
   useEffect(() => {
     if (!socket || !conversationId || allMessages.length === 0) return;
@@ -254,7 +289,7 @@ export default function MessageList({ conversationId }: Props) {
             {msg.replyTo && (
               <div className="mb-1 rounded-lg border-l-[3px] border-[var(--text-muted)] bg-black/10 px-2 py-1 text-xs text-[var(--text-secondary)]">
                 <p className="font-medium">{msg.replyTo.sender.displayName}</p>
-                <p className="truncate">{formatText(msg.replyTo.content)}</p>
+                <p className="truncate"><DecryptedContent conversationId={conversationId} content={msg.replyTo.content} iv={msg.replyTo.iv} /></p>
               </div>
             )}
 
@@ -292,7 +327,9 @@ export default function MessageList({ conversationId }: Props) {
             )}
 
             {msg.content && (
-              <p className="break-words text-sm leading-relaxed">{formatText(msg.content)}</p>
+              <p className="break-words text-sm leading-relaxed">
+                <DecryptedContent conversationId={conversationId} content={msg.content} iv={msg.iv} />
+              </p>
             )}
                 <div className="mt-0.5 flex items-center justify-end gap-1">
                   <span className="text-[10px] opacity-60">

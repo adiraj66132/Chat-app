@@ -40,7 +40,7 @@
   --hover-overlay: rgba(255,255,255,0.05);
 }
 
-:root.telegram {
+:root.aurora {
   --bg-primary: #0E1621;
   --bg-surface: #17212B;
   --bg-sidebar: #0E1621;
@@ -53,6 +53,23 @@
   --bubble-mine: #2B5278;
   --bubble-other: #182533;
   --hover-overlay: rgba(255,255,255,0.04);
+  --accent: #2AABEE;
+}
+
+:root.rose {
+  --bg-primary: #1A1015;
+  --bg-surface: #241620;
+  --bg-sidebar: #1A1015;
+  --text-primary: #FBEAF1;
+  --text-secondary: #C98DA8;
+  --text-muted: #8A5E71;
+  --border-color: #3A2230;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+  --bubble-mine: #E11D74;
+  --bubble-other: #2E1B28;
+  --hover-overlay: rgba(255,120,180,0.08);
+  --accent: #FF4D8D;
 }
 
 :root.nord {

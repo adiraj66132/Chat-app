@@ -1,4 +1,6 @@
 import { Server as SocketIOServer, type Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import { verifyAccessToken, type TokenPayload } from '../utils/jwt';
 import { prisma } from '../config/db';
 import * as onlineService from '../services/onlineService';
@@ -10,8 +12,23 @@ interface AuthSocket extends Socket {
   username?: string;
 }
 
+// Use the redis adapter when REDIS_URL is configured (horizontal scalability);
+// otherwise fall back to the default in-memory adapter for local dev.
+function configureAdapter(io: SocketIOServer) {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.warn('[socket] REDIS_URL not set — using in-memory adapter (single instance only)');
+    return;
+  }
+  const pub = new Redis(redisUrl);
+  const sub = pub.duplicate();
+  io.adapter(createAdapter(pub, sub));
+  console.log('[socket] redis adapter enabled');
+}
+
 export function setupSocket(io: SocketIOServer) {
   setIO(io);
+  configureAdapter(io);
 
   io.use((socket: AuthSocket, next) => {
     const token = socket.handshake.auth?.token;
@@ -42,7 +59,7 @@ export function setupSocket(io: SocketIOServer) {
     // Send the newly-connected socket a snapshot of everyone currently
     // online, so its presence state is accurate from the start (otherwise a
     // user connecting after others are already online would see them as offline).
-    const snapshot = onlineService.getOnlineUsers().filter((id) => id !== userId);
+    const snapshot = (await onlineService.getOnlineUsers()).filter((id) => id !== userId);
     socket.emit('user:presence', { users: snapshot });
 
     await prisma.user.update({
@@ -56,23 +73,19 @@ export function setupSocket(io: SocketIOServer) {
       select: { conversationId: true },
     });
 
-    // Also join global chat
-    const globalChat = await prisma.conversation.findFirst({
-      where: { type: 'GLOBAL' },
-    });
-
     for (const p of participants) {
       socket.join(`conversation:${p.conversationId}`);
     }
-    if (globalChat) {
-      socket.join(`conversation:${globalChat.id}`);
-    }
+    // NOTE: GLOBAL is intentionally NOT auto-joined here. It is opt-in — a user
+    // joins it on demand via `chat:join` (isParticipant permits any authenticated
+    // user into GLOBAL). Auto-joining it forced every user into a room they never
+    // opted into.
 
     // Register chat event handlers
     registerChatHandlers(io, socket, userId, username);
 
     socket.on('disconnect', async () => {
-      const wasOnline = onlineService.removeSocket(socket.id);
+      const wasOnline = await onlineService.removeSocket(socket.id);
       if (!wasOnline) {
         io.emit('user:offline', { userId });
         await prisma.user.update({

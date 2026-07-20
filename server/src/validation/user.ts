@@ -9,6 +9,7 @@ export const updateProfileSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, 'Username may only contain letters, numbers, and underscores')
     .optional(),
   bio: z.string().max(500).optional(),
+  publicKey: z.string().max(2000).optional(),
 });
 
 export const changePasswordSchema = z.object({

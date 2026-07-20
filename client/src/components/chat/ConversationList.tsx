@@ -5,7 +5,8 @@ import { useConversations } from '../../hooks/useConversations';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
-import { deleteConversation } from '../../api/conversations';
+import { useCrypto } from '../../contexts/CryptoContext';
+import { deleteConversation, leaveGroup } from '../../api/conversations';
 import Avatar from '../Avatar';
 import type { Conversation } from '../../types/conversation';
 import { fadeUp, containerStagger } from '../../animations/motion';
@@ -29,7 +30,9 @@ function ConversationItem({
   isActive,
   isOnline,
   onSelect,
-  onDelete,
+  onRequestDelete,
+  onConfirmDelete,
+  onCancelDelete,
   confirmDelete,
   deleting,
   currentUserId,
@@ -38,24 +41,39 @@ function ConversationItem({
   isActive: boolean;
   isOnline: boolean;
   onSelect: () => void;
-  onDelete: () => void;
+  onRequestDelete: () => void;
+  onConfirmDelete: () => void;
+  onCancelDelete: () => void;
   confirmDelete: boolean;
   deleting: boolean;
   currentUserId?: string;
 }) {
+  const { decryptMessage } = useCrypto();
   const other = getOtherUser(conv, currentUserId);
   const isGroup = conv.type === 'GROUP';
   const name = conv.name || other?.displayName || 'Unknown';
   const last = conv.lastMessage;
 
-  let lastMsg: string;
-  if (last?.content) {
-    lastMsg = last.content;
-  } else if (last?.fileUrl) {
-    lastMsg = last.fileName ? `📎 ${last.fileName}` : '📎 Attachment';
-  } else {
-    lastMsg = '';
-  }
+  // Decrypt the last-message preview asynchronously. Encrypted messages carry an
+  // `iv`; without decryption the sidebar would show raw ciphertext.
+  const [preview, setPreview] = useState<string>('');
+  useEffect(() => {
+    let cancelled = false;
+    if (last?.content) {
+      decryptMessage(conv.id, last.content, last.iv).then((t) => {
+        if (!cancelled) setPreview(t ?? '');
+      });
+    } else if (last?.fileUrl) {
+      setPreview(last.fileName ? `📎 ${last.fileName}` : '📎 Attachment');
+    } else {
+      setPreview('');
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [conv.id, last?.content, last?.iv, last?.fileUrl, last?.fileName, decryptMessage]);
+
+  const lastMsg = preview;
   const ts = last?.createdAt || conv.updatedAt;
 
   const badgeRef = useRef<HTMLDivElement>(null);
@@ -70,28 +88,35 @@ function ConversationItem({
   if (confirmDelete) {
     return (
       <div className={`flex items-center gap-3 px-4 py-3 ${isActive ? 'bg-telegram-blue/10' : ''}`}>
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20 text-sm font-bold text-red-500">
-          ×
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20 text-red-500">
+          {isGroup ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          ) : (
+            <span className="text-sm font-bold">×</span>
+          )}
         </div>
         <div className="flex-1">
           <p className="text-sm font-medium text-[var(--text-primary)]">
-            Delete <span className="font-semibold">{name}</span>?
+            {isGroup ? 'Leave' : 'Delete'} <span className="font-semibold">{name}</span>?
           </p>
-          <p className="text-xs text-[var(--text-secondary)]">All messages will be removed</p>
+          <p className="text-xs text-[var(--text-secondary)]">
+            {isGroup ? "You'll stop receiving its messages" : 'All messages will be removed'}
+          </p>
         </div>
         <div className="flex gap-1">
           <button
-            onClick={onDelete}
+            onClick={onConfirmDelete}
             disabled={deleting}
             className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
           >
-            {deleting ? '…' : 'Delete'}
+            {deleting ? '…' : isGroup ? 'Leave' : 'Delete'}
           </button>
           <button
-            onClick={onSelect}
-            className="rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-overlay)]"
+            onClick={onCancelDelete}
+            disabled={deleting}
+            className="rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-overlay)] disabled:opacity-50"
           >
-            Keep
+            {isGroup ? 'Stay' : 'Keep'}
           </button>
         </div>
       </div>
@@ -99,13 +124,14 @@ function ConversationItem({
   }
 
   return (
+    <div
+      className={`group relative flex w-full items-center transition-colors ${
+        isActive ? 'bg-telegram-blue/10' : 'hover:bg-[var(--hover-overlay)]'
+      }`}
+    >
       <button
         onClick={onSelect}
-        className={`group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-          isActive
-            ? 'bg-telegram-blue/10'
-            : 'hover:bg-[var(--hover-overlay)]'
-        }`}
+        className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left"
       >
         <div className="relative shrink-0">
           {isGroup ? (
@@ -139,7 +165,20 @@ function ConversationItem({
           {conv.unreadCount > 4 ? '4+' : conv.unreadCount}
         </div>
       )}
-    </button>
+      </button>
+      <button
+        onClick={onRequestDelete}
+        title={isGroup ? 'Leave group' : 'Delete conversation'}
+        aria-label={isGroup ? 'Leave group' : 'Delete conversation'}
+        className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-red-500/15 hover:text-red-500 focus:opacity-100 group-hover:opacity-100"
+      >
+        {isGroup ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+        )}
+      </button>
+    </div>
   );
 }
 
@@ -161,9 +200,21 @@ export default function ConversationList() {
   }, [socket, queryClient]);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteConversation(id),
-    onSuccess: () => {
+    // DMs are deleted; groups are left via the dedicated endpoint (deleting a
+    // group conversation server-side only removes you as a participant, which
+    // is exactly "leave" — but we route explicitly so socket events fire).
+    mutationFn: (conv: Conversation) =>
+      conv.type === 'GROUP' ? leaveGroup(conv.id).then(() => {}) : deleteConversation(conv.id),
+    onSuccess: (_data, conv) => {
+      // If the removed conversation was open, close it so ChatView doesn't
+      // keep rendering a stale/removed conversation.
+      if (activeConversation?.id === conv.id) setActiveConversation(null);
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      setConfirmDelete(null);
+    },
+    onError: () => {
+      // Drop out of the confirm state so the row is interactive again instead
+      // of getting stuck showing the "…" spinner forever.
       setConfirmDelete(null);
     },
   });
@@ -210,7 +261,9 @@ export default function ConversationList() {
               isOnline={isOnline}
               currentUserId={user?.id}
               onSelect={() => { setActiveConversation(conv); setShowSidebar(false); }}
-              onDelete={() => setConfirmDelete(conv.id)}
+              onRequestDelete={() => setConfirmDelete(conv.id)}
+              onConfirmDelete={() => deleteMutation.mutate(conv)}
+              onCancelDelete={() => setConfirmDelete(null)}
               confirmDelete={confirmDelete === conv.id}
               deleting={deleteMutation.isPending && confirmDelete === conv.id}
             />

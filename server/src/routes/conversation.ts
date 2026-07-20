@@ -10,6 +10,7 @@ import {
   addMembersSchema,
   updateGroupSchema,
   changeRoleSchema,
+  conversationKeySchema,
 } from '../validation/conversation';
 
 const router = Router();
@@ -33,6 +34,8 @@ router.patch(
 );
 router.patch('/:id', validate(updateGroupSchema), conversationController.updateGroup);
 router.post('/:id/leave', conversationController.leaveGroup);
+router.get('/:id/keys', conversationController.getKeys);
+router.post('/:id/keys', validate(conversationKeySchema), conversationController.saveKey);
 router.get('/:id/pinned', messageController.getPinnedMessages);
 router.delete('/:id/messages', conversationController.clearMessages);
 router.get('/:id', conversationController.getById);

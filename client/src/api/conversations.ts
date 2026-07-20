@@ -77,3 +77,12 @@ export async function deleteConversation(id: string): Promise<void> {
 export async function clearConversationMessages(id: string): Promise<void> {
   await apiRequest(`/api/conversations/${id}/messages`, { method: 'DELETE' });
 }
+
+// Persist this client's wrapped per-conversation encryption key (CEK) on the
+// server so peers can discover/verify it.
+export async function saveConversationKey(conversationId: string, wrappedKey: string): Promise<void> {
+  await apiRequest(`/api/conversations/${conversationId}/keys`, {
+    method: 'POST',
+    body: JSON.stringify({ wrappedKey }),
+  });
+}

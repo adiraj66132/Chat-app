@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import * as messageService from '../services/messageService';
+
+const uuidSchema = z.string().uuid();
 
 export async function getMessages(req: Request, res: Response, next: NextFunction) {
   try {
-    const cursor = req.query.cursor as string | undefined;
+    const conversationId = uuidSchema.parse(req.params.conversationId);
+    const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
     const result = await messageService.getMessages(
-      req.params.conversationId as string,
+      conversationId,
       req.user!.userId,
       cursor
     );
@@ -17,8 +21,9 @@ export async function getMessages(req: Request, res: Response, next: NextFunctio
 
 export async function sendMessage(req: Request, res: Response, next: NextFunction) {
   try {
+    const conversationId = uuidSchema.parse(req.params.conversationId);
     const message = await messageService.sendMessage(
-      req.params.conversationId as string,
+      conversationId,
       req.user!.userId,
       req.body
     );
@@ -30,8 +35,9 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
 
 export async function editMessage(req: Request, res: Response, next: NextFunction) {
   try {
+    const messageId = uuidSchema.parse(req.params.id);
     const message = await messageService.editMessage(
-      req.params.id as string,
+      messageId,
       req.user!.userId,
       req.body.content
     );
@@ -43,7 +49,7 @@ export async function editMessage(req: Request, res: Response, next: NextFunctio
 
 export async function searchMessages(req: Request, res: Response, next: NextFunction) {
   try {
-    const q = String(req.query.q || '');
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     if (q.length < 1) { res.json([]); return; }
     const results = await messageService.searchMessages(req.user!.userId, q);
     res.json(results);
@@ -54,21 +60,21 @@ export async function searchMessages(req: Request, res: Response, next: NextFunc
 
 export async function pinMessage(req: Request, res: Response, next: NextFunction) {
   try {
-    await messageService.pinMessage(req.params.id as string, req.user!.userId);
+    await messageService.pinMessage(uuidSchema.parse(req.params.id), req.user!.userId);
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
 
 export async function unpinMessage(req: Request, res: Response, next: NextFunction) {
   try {
-    await messageService.unpinMessage(req.params.id as string, req.user!.userId);
+    await messageService.unpinMessage(uuidSchema.parse(req.params.id), req.user!.userId);
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
 
 export async function getPinnedMessages(req: Request, res: Response, next: NextFunction) {
   try {
-    const pinned = await messageService.getPinnedMessages(req.params.id as string, req.user!.userId);
+    const pinned = await messageService.getPinnedMessages(uuidSchema.parse(req.params.id), req.user!.userId);
     res.json(pinned);
   } catch (err) { next(err); }
 }
@@ -76,8 +82,9 @@ export async function getPinnedMessages(req: Request, res: Response, next: NextF
 export async function forwardMessage(req: Request, res: Response, next: NextFunction) {
   try {
     const { targetConversationId } = req.body;
-    if (!targetConversationId) { res.status(400).json({ error: 'targetConversationId required' }); return; }
-    const message = await messageService.forwardMessage(req.params.id as string, req.user!.userId, targetConversationId);
+    const messageId = uuidSchema.parse(req.params.id);
+    const target = uuidSchema.parse(targetConversationId);
+    const message = await messageService.forwardMessage(messageId, req.user!.userId, target);
     res.status(201).json(message);
   } catch (err) {
     next(err);
@@ -86,7 +93,8 @@ export async function forwardMessage(req: Request, res: Response, next: NextFunc
 
 export async function deleteMessage(req: Request, res: Response, next: NextFunction) {
   try {
-    await messageService.deleteMessage(req.params.id as string, req.user!.userId);
+    const messageId = uuidSchema.parse(req.params.id);
+    await messageService.deleteMessage(messageId, req.user!.userId);
     res.json({ message: 'Deleted' });
   } catch (err) {
     next(err);
